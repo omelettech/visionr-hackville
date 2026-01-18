@@ -83,29 +83,18 @@
     <h3>Active Tags</h3>
     <div id="active-tags-list">Waiting for tags...</div>
 
+    <script src="spatialAudio.js"></script>
     <script>
-        let ctx;
-        let isAudioInit = false;
+        const audioManager = new SpatialAudioManager({
+            motionThreshold: 0.02,
+            idleBeepInterval: 3000
+        });
 
-        // Settings (Defaults)
-        let MOTION_THRESHOLD = 0.10;
-        let IDLE_BEEP_INTERVAL = 1000; // ms
-        let BEEP_DURATION = 100; // ms
-
-        // Store active audio nodes here: 
-        // { tagId: { osc, panner, gain, lastX, lastY, lastZ, lastMoveTime, lastBeepTime, isMoving, isBeeping } }
-        const activeSounds = {};
-
-        // Map Tag IDs to Frequencies (Notes)
-        const TAG_FREQUENCIES = {
-            0: 261.63, // C4
-            1: 293.66, // D4
-            2: 329.63, // E4
-            3: 349.23, // F4
-            4: 392.00, // G4
-            5: 440.00, // A4
-            "default": 100.00
-        };
+        // Initialize UI with manager defaults
+        document.getElementById('threshold-value').innerText = audioManager.MOTION_THRESHOLD.toFixed(2);
+        document.getElementById('interval-value').innerText = audioManager.IDLE_BEEP_INTERVAL;
+        document.querySelector('input[oninput*="updateThreshold"]').value = audioManager.MOTION_THRESHOLD;
+        document.querySelector('input[oninput*="updateBeepInterval"]').value = audioManager.IDLE_BEEP_INTERVAL;
 
         const socket = new WebSocket('ws://localhost:8765');
         const statusDiv = document.getElementById('connection-status');
@@ -113,27 +102,26 @@
 
         // --- UI HANDLERS ---
         function updateThreshold(val) {
-            MOTION_THRESHOLD = parseFloat(val);
-            document.getElementById('threshold-value').innerText = MOTION_THRESHOLD.toFixed(2);
+            audioManager.updateThreshold(val);
+            document.getElementById('threshold-value').innerText = audioManager.MOTION_THRESHOLD.toFixed(2);
         }
         function updateBeepInterval(val) {
-            IDLE_BEEP_INTERVAL = parseInt(val);
-            document.getElementById('interval-value').innerText = IDLE_BEEP_INTERVAL;
+            audioManager.updateBeepInterval(val);
+            document.getElementById('interval-value').innerText = audioManager.IDLE_BEEP_INTERVAL;
         }
         function updateBeepDuration(val) {
-            BEEP_DURATION = parseInt(val);
-            document.getElementById('duration-value').innerText = BEEP_DURATION;
+            audioManager.updateBeepDuration(val);
+            document.getElementById('duration-value').innerText = audioManager.BEEP_DURATION;
         }
 
         // --- WEBSOCKET LOGIC ---
-
         socket.addEventListener('open', () => {
             statusDiv.innerText = "Connected to Python Server";
             statusDiv.style.color = "#0f0";
         });
 
         socket.addEventListener('message', (event) => {
-            if (!isAudioInit) return;
+            if (!audioManager.isAudioInit) return;
 
             const visibleTags = JSON.parse(event.data);
             const visibleIds = new Set();
@@ -146,7 +134,7 @@
                 const y = -tag.pose[1] * 5;
                 const z = Math.abs(tag.pose[2]);
 
-                const sound = activeSounds[tag.id];
+                const sound = audioManager.activeSounds[tag.id];
                 const statusColor = (sound && sound.isMoving) ? "#0f0" : "#ff0";
                 const statusText = (sound && sound.isMoving) ? "Moving" : "Idle";
 
@@ -158,17 +146,17 @@
                     </div>
                 `;
 
-                if (!activeSounds[tag.id]) {
-                    createSound(tag.id, x, y, z);
+                if (!audioManager.activeSounds[tag.id]) {
+                    audioManager.createSound(tag.id, x, y, z);
                 }
-                updateSoundPosition(tag.id, x, y, z);
+                audioManager.updateSoundPosition(tag.id, x, y, z);
             });
 
             listDiv.innerHTML = html || "No tags visible";
 
-            for (const id in activeSounds) {
+            for (const id in audioManager.activeSounds) {
                 if (!visibleIds.has(parseInt(id))) {
-                    removeSound(id);
+                    audioManager.removeSound(id);
                 }
             }
         });
@@ -178,130 +166,8 @@
             statusDiv.style.color = "#f00";
         });
 
-        // --- AUDIO ENGINE ---
-
         async function initAudio() {
-            if (ctx) return;
-            ctx = new (window.AudioContext || window.webkitAudioContext)();
-            isAudioInit = true;
-            console.log("Audio Engine Started");
-            requestAnimationFrame(audioLoop);
-        }
-
-        function createSound(id, x, y, z) {
-            const freq = TAG_FREQUENCIES[id] || TAG_FREQUENCIES["default"];
-
-            const osc = ctx.createOscillator();
-            osc.type = "sawtooth";
-            osc.frequency.value = freq;
-
-            const gain = ctx.createGain();
-            gain.gain.value = 0;
-
-            const panner = new PannerNode(ctx, {
-                panningModel: "HRTF",
-                distanceModel: "exponential",
-                positionX: x,
-                positionY: y,
-                positionZ: z,
-                refDistance: 1,
-                maxDistance: 100,
-                rolloffFactor: 1.5,
-            });
-
-            osc.connect(gain).connect(panner).connect(ctx.destination);
-            osc.start();
-
-            activeSounds[id] = {
-                osc, panner, gain,
-                lastX: x, lastY: y, lastZ: z,
-                lastMoveTime: Date.now(),
-                lastBeepTime: 0,
-                isMoving: false,
-                isBeeping: false
-            };
-        }
-
-        function updateSoundPosition(id, x, y, z) {
-            const sound = activeSounds[id];
-            if (!sound) return;
-
-            // Calculate distance moved
-            const dx = x - sound.lastX;
-            const dy = y - sound.lastY;
-            const dz = z - sound.lastZ;
-            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-            // Instant state switch
-            sound.isMoving = dist > MOTION_THRESHOLD;
-
-            sound.lastX = x;
-            sound.lastY = y;
-            sound.lastZ = z;
-
-            // Highly responsive tracking (reduced time constant)
-            const timeConstant = 0.03;
-            sound.panner.positionX.setTargetAtTime(x, ctx.currentTime, timeConstant);
-            sound.panner.positionY.setTargetAtTime(y, ctx.currentTime, timeConstant);
-            sound.panner.positionZ.setTargetAtTime(z, ctx.currentTime, timeConstant);
-        }
-
-        function audioLoop() {
-            const now = Date.now();
-
-            for (const id in activeSounds) {
-                const sound = activeSounds[id];
-
-                if (sound.isMoving) {
-                    // Continuous sound (Immediate ramp up)
-                    sound.gain.gain.setTargetAtTime(0.1, ctx.currentTime, 0.02);
-                } else {
-                    // Immediate ramp down when stationary
-                    if (!sound.isBeeping) {
-                        sound.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
-                    }
-
-                    // Periodic Beep
-                    if (now - sound.lastBeepTime > IDLE_BEEP_INTERVAL) {
-                        triggerBeep(sound);
-                        sound.lastBeepTime = now;
-                    }
-                }
-            }
-            requestAnimationFrame(audioLoop);
-        }
-
-        function triggerBeep(sound) {
-            const now = ctx.currentTime;
-            sound.isBeeping = true;
-            // Pulse gain: 0 -> 0.1 -> 0
-            sound.gain.gain.cancelScheduledValues(now);
-            sound.gain.gain.setValueAtTime(sound.gain.gain.value, now);
-            sound.gain.gain.linearRampToValueAtTime(0.1, now + 0.01);
-            sound.gain.gain.linearRampToValueAtTime(0.1, now + BEEP_DURATION / 1000);
-            sound.gain.gain.linearRampToValueAtTime(0, now + (BEEP_DURATION + 10) / 1000);
-
-            setTimeout(() => {
-                sound.isBeeping = false;
-            }, BEEP_DURATION + 20);
-        }
-
-        function removeSound(id) {
-            const sound = activeSounds[id];
-            if (!sound) return;
-
-            // Instant cleanup for removed tags
-            sound.gain.gain.cancelScheduledValues(ctx.currentTime);
-            sound.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
-
-            setTimeout(() => {
-                sound.osc.stop();
-                sound.osc.disconnect();
-                sound.panner.disconnect();
-                sound.gain.disconnect();
-            }, 50);
-
-            delete activeSounds[id];
+            await audioManager.init();
         }
     </script>
 </body>
