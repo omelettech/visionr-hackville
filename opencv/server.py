@@ -8,8 +8,8 @@ from websockets.asyncio.server import serve
 
 async def echo(websocket):
     async for message in websocket:
-        print("server recive " + message)
-        await websocket.send("server recive " + message)
+        #print("server recive " + message)
+        # await websocket.send("server recive " + message)
 
 # async def send_data(data):
 #     print("sending data")

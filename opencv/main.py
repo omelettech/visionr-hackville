@@ -1,106 +1,104 @@
 import cv2
 import pupil_apriltags
-import numpy as np
 import asyncio
 import json
-from websockets.asyncio.client import connect
+from websockets.asyncio.server import serve
 
 # --- CONFIGURATION ---
-TAG_SIZE = 0.05  # 5 cm
-SERVER_URI = "ws://localhost:8765" # Where we are sending data
+TAG_SIZE = 0.05
+PORT = 8765
 
-tag_to_name = {
-    0: "Exit", 1: "Enter", 2: "Left", 
-    3: "Right", 4: "Up", 5: "Down"
-}
+# Store all connected clients in a set
+CONNECTED_CLIENTS = set()
 
-async def main():
-    # 1. Setup Camera
+async def handler(websocket):
+    """
+    Handles new connections.
+    We just add the client to the list and keep the connection open.
+    We do NOT wait for messages from the client.
+    """
+    print(f"New Client Connected! (Total: {len(CONNECTED_CLIENTS) + 1})")
+    CONNECTED_CLIENTS.add(websocket)
+    try:
+        # Keep the connection alive until the client disconnects
+        await websocket.wait_closed()
+    finally:
+        CONNECTED_CLIENTS.remove(websocket)
+        print(f"Client Disconnected. (Total: {len(CONNECTED_CLIENTS)})")
+
+async def camera_loop():
+    """
+    Runs the AprilTag detection and broadcasts data to connected clients.
+    """
     cap = cv2.VideoCapture(0)
     
-    # Get actual resolution for correct camera params (Fixes "minima" error)
+    # Auto-calc camera params
     ret, frame = cap.read()
-    if not ret:
-        print("Could not read from webcam.")
-        return
+    if not ret: return
     h, w = frame.shape[:2]
-    camera_params = [w, h, w/2, h/2] # [fx, fy, cx, cy]
-
-    # 2. Setup Detector
+    camera_params = [w, w, w/2, h/2]
+    
     detector = pupil_apriltags.Detector(families='tag36h11', quad_decimate=2.0)
 
-    print(f"Connecting to WebSocket server at {SERVER_URI}...")
-    
-    # 3. Connect to Server
-    try:
-        async with connect(SERVER_URI) as websocket:
-            print("Connected! Press 'q' to quit.")
+    print("Camera Loop Started. Waiting for tags...")
 
-            while True:
-                ret, frame = cap.read()
-                if not ret: break
+    while True:
+        ret, frame = cap.read()
+        if not ret: break
 
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                detections = detector.detect(gray, estimate_tag_pose=True, 
-                                             camera_params=camera_params, tag_size=TAG_SIZE)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        detections = detector.detect(gray, estimate_tag_pose=True, 
+                                     camera_params=camera_params, tag_size=TAG_SIZE)
 
-                detected_data = []
+        detected_data = []
 
-                for detection in detections:
-                    # -- Visuals --
-                    corners = detection.corners.astype(int)
-                    cv2.polylines(frame, [corners], isClosed=True, color=(0, 255, 0), thickness=2)
+        # -- Process Detections --
+        for detection in detections:
+            # Draw box (visual feedback for server admin)
+            corners = detection.corners.astype(int)
+            cv2.polylines(frame, [corners], isClosed=True, color=(0, 255, 0), thickness=2)
 
-                    # tag_name = tag_to_name.get(detection.tag_id, "Unknown")
-                    # cv2.putText(frame, f"ID: {tag_name}", (corners[0][0], corners[0][1] - 10),
-                    #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-######################################################################
-                    tag_id = tag_to_name.get(detection.tag_id, "Unknown")   
-                    # -- Prepare Data to Send --
-                    if detection.pose_t is not None:
-                        x, y, z = detection.pose_t.flatten()
-                
-                        # Z is the depth (distance from camera)
-                        pose_text = f"X: {x:.2f} Y: {y:.2f} Depth: {z:.2f}m Tag ID: {tag_id}"
+            # Prepare Data
+            if detection.pose_t is not None:
+                pose = detection.pose_t.flatten().tolist()
+                detected_data.append({
+                    "id": detection.tag_id,
+                    "z_distance": round(pose[2], 3),
+                    "pose": [round(n, 3) for n in pose]
+                })
 
-                        print(pose_text)
-                        
-                        cv2.putText(frame, pose_text, (corners[0][0] - 80, corners[0][1] - 50),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 100, 255), 2)
-######################################################################
-                        # Flatten pose to a simple list [x, y, z]
-                        pose = detection.pose_t.flatten().tolist()
-                        
-                        tag_info = {
-                            "id": detection.tag_id,
-                            "name": tag_id,
-                            "distance_m": round(pose[2], 3), # Z is depth
-                            "pose": [round(n, 3) for n in pose]
-                        }
-                        detected_data.append(tag_info)
+        # -- BROADCAST TO CLIENTS --
+        # Only do the work if we have clients and data
+        if CONNECTED_CLIENTS and detected_data:
+            message = json.dumps(detected_data)
+            
+            # Send to all connected clients
+            # We use a copy (list(CONNECTED_CLIENTS)) to avoid errors if a client disconnects mid-loop
+            for ws in list(CONNECTED_CLIENTS):
+                try:
+                    await ws.send(message)
+                except:
+                    pass # Connection errors are handled by the handler
 
-                # -- Send Data --
-                if detected_data:
-                    # Convert list of dicts to JSON string
-                    json_message = json.dumps(detected_data)
-                    await websocket.send(json_message)
-                    # print(f"Sent: {json_message}") # Uncomment to debug
+        # Show video locally
+        cv2.imshow('Server View', frame)
+        
+        # Async sleep is crucial to let the Server Handler run!
+        await asyncio.sleep(0.01)
 
-                # -- Display Video --
-                cv2.imshow('AprilTag Sender', frame)
-                
-                # Allow async loop to breathe (Critical for websockets)
-                await asyncio.sleep(0.01) 
-                
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
-    except ConnectionRefusedError:
-        print(f"ERROR: Could not connect to {SERVER_URI}.")
-        print("Make sure your WebSocket SERVER is running first.")
-    
     cap.release()
     cv2.destroyAllWindows()
+
+async def main():
+    # 1. Start the WebSocket Server (it runs in the background)
+    async with serve(handler, "localhost", PORT):
+        print(f"Server started on ws://localhost:{PORT}")
+        
+        # 2. Run the Camera Loop (this keeps the program alive)
+        await camera_loop()
 
 if __name__ == "__main__":
     try:
