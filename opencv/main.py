@@ -8,12 +8,8 @@ from websockets.asyncio.server import serve
 TAG_SIZE = 0.08
 PORT = 8765
 tag_to_name = {
-    0: "Exit",
-    1: "Enter",
-    2: "Left",
-    3: "Right",
-    4: "Up",
-    5: "Down"
+    0: "Exit", 1: "Enter", 2: "Map",
+    3: "Room 1", 4: "Room 2", 5: "Room 3",
 }
 # Store all connected clients in a set
 CONNECTED_CLIENTS = set()
@@ -38,12 +34,16 @@ async def camera_loop():
     Runs the AprilTag detection and broadcasts data to connected clients.
     """
     cap = cv2.VideoCapture(0)
+
+    # Force 1080p Resolution
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)    
     
     # Auto-calc camera params
     ret, frame = cap.read()
     if not ret: return
-    h, w = frame.shape[:2]
-    camera_params = [w, w, w/2, h/2]
+    #h, w = frame.shape[:2]
+    camera_params = [1250.0, 1250.0, 960.0, 540.0]
     
     detector = pupil_apriltags.Detector(families='tag36h11', quad_decimate=2.0)
 
