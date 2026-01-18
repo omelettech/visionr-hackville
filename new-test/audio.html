@@ -1,31 +1,82 @@
 <!doctype html>
-<html>
+<html lang="en">
 
 <head>
-    <title>AprilTag Tactical Display</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visionr Audio System</title>
     <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-main: #e0e0e0;
+            --text-muted: #a0a0a0;
+            --accent: #00e676;
+            /* Modern bright green */
+            --accent-dim: rgba(0, 230, 118, 0.1);
+            --danger: #ff5252;
+        }
+
         body {
-            font-family: 'Courier New', Courier, monospace;
-            padding: 20px;
-            background: #111;
-            color: #0f0;
-            text-align: center;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
             margin: 0;
+            padding: 40px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
         }
 
         h2 {
-            margin-top: 0;
-            text-shadow: 0 0 10px #0f0;
+            font-weight: 300;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+            font-size: 1.8rem;
+            color: var(--accent);
         }
 
+        #connection-status {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 30px;
+            font-weight: 500;
+        }
+
+        /* BUTTON STYLING */
         button {
-            padding: 10px 20px;
-            font-size: 1.2em;
-            cursor: pointer;
-            background: #0f0;
+            background-color: var(--accent);
             color: #000;
             border: none;
-            border-radius: 2px;
+            padding: 12px 30px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s;
+            margin-bottom: 40px;
+            letter-spacing: 0.5px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 230, 118, 0.4);
+            background-color: #00c853;
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        /* LAYOUT GRID */
+        .dashboard-wrapper {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
             margin-bottom: 20px;
             font-weight: bold;
             font-family: inherit;
@@ -35,137 +86,179 @@
             background: #fff;
         }
 
-        /* MAIN LAYOUT */
-        .dashboard-wrapper {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 30px;
-        }
-
-        /* WIDGET CONTAINERS */
-        .widget-box {
+        /* CARDS */
+        .widget-box,
+        .settings-box,
+        .status-box {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
             display: flex;
             flex-direction: column;
             align-items: center;
+            transition: border 0.3s;
+            border: 1px solid transparent;
         }
 
         .widget-title {
-            background: #002200;
-            color: #0f0;
-            padding: 5px 15px;
-            border: 1px solid #0f0;
-            border-bottom: none;
-            font-weight: bold;
-            letter-spacing: 2px;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            font-weight: 600;
+            width: 100%;
+            text-align: left;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
         }
 
-        /* 1. RADAR STYLING */
-        .radar-view {
-            background: #000;
-            border: 2px solid #0f0;
-            border-radius: 150px 150px 0 0;
-            width: 300px;
-            height: 150px;
-            box-shadow: 0 -5px 20px rgba(0, 255, 0, 0.2);
-            position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: flex-end;
-            overflow: hidden;
-        }
-
-        /* 2. HUD STYLING */
+        /* CANVAS CONTAINERS */
+        .radar-view,
         .hud-view {
-            background: #000;
-            border: 2px solid #0f0;
-            border-radius: 10px;
-            width: 400px;
-            height: 300px;
-            /* Taller to distinguish from radar */
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
             position: relative;
-            cursor: crosshair;
+            background: #181818;
+            /* Slightly darker for contrast */
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #333;
+        }
+
+        .radar-view {
+            border-radius: 150px 150px 0 0;
+            border-bottom: none;
         }
 
         .hud-overlay {
             position: absolute;
-            bottom: 10px;
-            left: 10px;
+            bottom: 15px;
+            left: 15px;
             font-size: 12px;
+            color: var(--accent);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 4px 8px;
+            border-radius: 4px;
             pointer-events: none;
-            color: #0f0;
         }
 
-        /* SETTINGS & LISTS */
+        .meta-text {
+            margin-top: 15px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* SETTINGS & INPUTS */
         .bottom-panel {
-            margin-top: 30px;
-            display: flex;
-            justify-content: center;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 20px;
-            flex-wrap: wrap;
+            width: 100%;
+            max-width: 1200px;
         }
 
-        .settings-box,
+        @media (max-width: 768px) {
+            .bottom-panel {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+            color: var(--text-main);
+            width: 100%;
+        }
+
+        input[type=range] {
+            width: 60%;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
         .status-box {
-            background: #001100;
-            border: 1px solid #0f0;
-            padding: 15px;
-            text-align: left;
-            min-width: 250px;
+            align-items: flex-start;
+            min-height: 200px;
+        }
+
+        #active-tags-list div {
+            padding: 8px 0;
+            border-bottom: 1px solid #333;
+            width: 100%;
+            font-size: 0.9rem;
+        }
+
+        #active-tags-list div:last-child {
+            border-bottom: none;
         }
     </style>
 </head>
 
 <body>
-    <h2>TACTICAL AUDIO SYSTEM</h2>
-    <div id="connection-status" style="color: #666; margin-bottom: 10px;">STANDBY...</div>
-    <button onclick="initAudio()">INITIALIZE SYSTEMS</button>
+    <h2>Visionr Dev Dashboard</h2>
+    <div id="connection-status">Waiting for Signal...</div>
+    <button onclick="initAudio()">Enable System</button>
 
     <div class="dashboard-wrapper">
-
         <div class="widget-box">
-            <div class="widget-title">RADAR (TOP-DOWN)</div>
+            <div class="widget-title">Top-Down Radar</div>
             <div class="radar-view">
                 <canvas id="radarCanvas" width="300" height="150"></canvas>
             </div>
-            <div style="font-size: 0.8em; color: #0f0; margin-top: 5px;">RANGE: 3 METERS</div>
+            <div class="meta-text">Scan Range: 3.0 Meters</div>
         </div>
 
         <div class="widget-box">
-            <div class="widget-title">HUD (VISUAL)</div>
+            <div class="widget-title">Visual HUD</div>
             <div class="hud-view">
                 <canvas id="hudCanvas" width="400" height="300"></canvas>
-                <div class="hud-overlay" id="hud-text">NO TARGETS</div>
+                <div class="hud-overlay" id="hud-text">No Targets</div>
             </div>
-            <div style="font-size: 0.8em; color: #0f0; margin-top: 5px;">FOV: 60 DEGREES</div>
+            <div class="meta-text">FOV: 60°</div>
         </div>
-
     </div>
 
     <div class="bottom-panel">
         <div class="settings-box">
-            <h3 style="margin: 0 0 10px 0; border-bottom: 1px solid #0f0;">AUDIO PARAMS</h3>
-            <label style="display: block; margin-bottom: 5px;">
-                Motion Thresh: <span id="threshold-value">0.02</span>
-                <input type="range" min="0.01" max="0.5" value="0.02" step="0.01" oninput="updateThreshold(this.value)"
-                    style="width: 100%;">
+            <div class="widget-title">Audio Configuration</div>
+
+            <label>
+                <span>Motion Sensitivity</span>
+                <input type="range" min="0.01" max="0.5" value="0.10" step="0.01" oninput="updateThreshold(this.value)">
             </label>
-            <label style="display: block; margin-bottom: 5px;">
-                Idle Beep: <span id="interval-value">3000</span>ms
-                <input type="range" min="200" max="5000" value="3000" step="100"
-                    oninput="updateBeepInterval(this.value)" style="width: 100%;">
+            <div
+                style="font-size:0.8em; color:var(--text-muted); margin-top:-10px; margin-bottom:15px; text-align:right; width:100%">
+                <span id="threshold-value">0.04</span>
+            </div>
+
+            <label>
+                <span>Idle Interval (ms)</span>
+                <input type="range" min="200" max="5000" value="1000" step="100"
+                    oninput="updateBeepInterval(this.value)">
             </label>
-            <label style="display: block; margin-bottom: 15px;">
-                Beep Duration: <span id="duration-value">100</span>ms
-                <input type="range" min="50" max="500" value="100" step="10" oninput="updateBeepDuration(this.value)"
-                    style="width: 100%;">
+            <div
+                style="font-size:0.8em; color:var(--text-muted); margin-top:-10px; margin-bottom:15px; text-align:right; width:100%">
+                <span id="interval-value">1000</span>
+            </div>
+
+            <label>
+                <span>Beep Duration (ms)</span>
+                <input type="range" min="50" max="500" value="100" step="10" oninput="updateBeepDuration(this.value)">
             </label>
+            <div
+                style="font-size:0.8em; color:var(--text-muted); margin-top:-10px; margin-bottom:0px; text-align:right; width:100%">
+                <span id="duration-value">100</span>
+            </div>
         </div>
 
-        <div class="status-box" id="active-tags-list">
-            <h3 style="margin: 0 0 10px 0; border-bottom: 1px solid #0f0;">TARGET LIST</h3>
-            <div>Awaiting Data...</div>
+        <div class="status-box">
+            <div class="widget-title">Active Targets</div>
+            <div id="active-tags-list" style="width: 100%;">
+                <div style="color: var(--text-muted); font-style: italic;">Awaiting Data...</div>
+            </div>
         </div>
     </div>
 
@@ -205,8 +298,8 @@
         const listDiv = document.getElementById('active-tags-list');
 
         socket.addEventListener('open', () => {
-            statusDiv.innerText = "LINK ESTABLISHED";
-            statusDiv.style.color = "#0f0";
+            statusDiv.innerText = "● System Online";
+            statusDiv.style.color = "#00e676";
             drawRadarGrid();
             drawHUDGrid();
         });
@@ -218,7 +311,9 @@
             const visibleIds = new Set();
             let html = "";
 
+            // 1. Clear Canvases
             drawRadarGrid();
+            drawHUDGrid();
             drawHUDGrid();
 
             visibleTags.forEach(tag => {
@@ -228,9 +323,11 @@
                 const rawY = tag.pose[1];
                 const rawZ = tag.pose[2];
 
-                drawRadarDot(rawX, rawZ, tag.id);
-                drawHUDTarget(rawX, rawY, rawZ, tag.id);
+                // 2. Draw Visuals
+                drawRadarDot(rawX, rawZ, TAG_NAMES[tag.id], tag.id);
+                drawHUDTarget(rawX, rawY, rawZ, TAG_NAMES[tag.id], tag.id);
 
+                // 3. Audio Update
                 const audioX = rawX * 5;
                 const audioY = rawY * 10;
                 const audioZ = Math.abs(rawZ);
