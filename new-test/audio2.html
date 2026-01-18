@@ -178,6 +178,16 @@
         let BEEP_DURATION = 100;
         const activeSounds = {};
 
+        const TAG_NAMES = {
+            0: "Exit",
+            1: "Enter",
+            2: "Map",
+            3: "Room 1",
+            4: "Room 2",
+            5: "Room 3",
+            "default": "Unknown"
+        };
+
         const TAG_FREQUENCIES = {
             0: 261.63, 1: 293.66, 2: 329.63,
             3: 349.23, 4: 392.00, 5: 440.00,
@@ -228,8 +238,8 @@
                 const rawZ = tag.pose[2];
 
                 // 2. Draw Visuals
-                drawRadarDot(rawX, rawZ, tag.id);
-                drawHUDTarget(rawX, rawY, rawZ, tag.id);
+                drawRadarDot(rawX, rawZ, TAG_NAMES[tag.id], tag.id);
+                drawHUDTarget(rawX, rawY, rawZ, TAG_NAMES[tag.id], tag.id);
 
                 // 3. Update Audio
                 const audioX = rawX * 5;
@@ -245,7 +255,7 @@
                 const sound = activeSounds[tag.id];
                 const status = (sound && sound.isMoving) ? "MOVING" : "STATIC";
                 html += `<div style="margin-bottom:5px; color:${sound.isMoving ? '#fff' : '#0f0'}">
-                            [ID:${tag.id}] Z:${rawZ.toFixed(2)}m - ${status}
+                            [ID:${TAG_NAMES[tag.id]}] Z:${rawZ.toFixed(2)}m - ${status}
                          </div>`;
             });
 
