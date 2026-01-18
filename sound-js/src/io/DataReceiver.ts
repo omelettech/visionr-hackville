@@ -49,8 +49,8 @@ export class SimulatedReceiver implements DataReceiver {
             obj.phase += obj.speed;
 
             // Lock X and Z to fixed positions
-            obj.x = 0;
-            obj.z = -2; // 2 meters in front (-Z is into screen)
+            obj.x = Math.sin(obj.phase) * 3;
+            obj.z = Math.cos(obj.phase) * 3; // 2 meters in front (-Z is into screen)
 
             // Animate Y (Up/Down) only
             // Oscillate between -3 and +3
