@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>AprilTag Polyphonic 3D Audio</title>
+    <title>AprilTag Semi-Circle Radar</title>
     <style>
         body {
             font-family: sans-serif;
@@ -27,11 +27,38 @@
             margin-bottom: 20px;
         }
 
+        .dashboard-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        /* Styling for the Radar Widget */
+        .radar-widget {
+            background: #000;
+            border: 2px solid #0f0;
+            /* Border radius: Top-Left, Top-Right, Bottom-Right, Bottom-Left */
+            border-radius: 150px 150px 0 0;
+            width: 300px;
+            height: 150px;
+            /* Half height */
+            position: relative;
+            box-shadow: 0 -4px 15px rgba(0, 255, 0, 0.3);
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            /* Align canvas to bottom */
+            overflow: hidden;
+        }
+
         #active-tags-list {
             display: flex;
             justify-content: center;
             gap: 10px;
             flex-wrap: wrap;
+            width: 100%;
         }
 
         .tag-card {
@@ -41,42 +68,59 @@
             border-radius: 8px;
             width: 120px;
         }
+
+        .settings-box {
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: left;
+            min-width: 300px;
+        }
     </style>
 </head>
 
 <body>
-    <h2>Polyphonic 3D Audio Positioner</h2>
+    <h2>AprilTag Radar (Front View)</h2>
 
     <div class="status" id="connection-status">Connecting to WebSocket...</div>
 
     <button onclick="initAudio()">Enable Audio (Click Me First)</button>
 
-    <div
-        style="margin: 20px 0; padding: 15px; background: #333; border-radius: 8px; display: inline-block; text-align: left; min-width: 300px;">
-        <h3 style="margin-top: 0; text-align: center;">Audio Settings</h3>
+    <div class="dashboard-container">
 
-        <div style="margin-bottom: 10px;">
-            <label style="display: block;">
-                Motion Threshold (Shake Filter): <span id="threshold-value">0.10</span>
-                <input type="range" min="0.01" max="0.5" value="0.10" step="0.01" oninput="updateThreshold(this.value)"
-                    style="width: 100%;">
-            </label>
+        <div style="text-align: center;">
+            <div class="radar-widget">
+                <canvas id="radarCanvas" width="300" height="150"></canvas>
+            </div>
+            <div id="radar-text" style="margin-top: 10px; color: #0f0; font-family: monospace;">No Signal</div>
         </div>
 
-        <div style="margin-bottom: 10px;">
-            <label style="display: block;">
-                Idle Beep Interval: <span id="interval-value">1000</span>ms
-                <input type="range" min="200" max="5000" value="1000" step="100"
-                    oninput="updateBeepInterval(this.value)" style="width: 100%;">
-            </label>
-        </div>
+        <div class="settings-box">
+            <h3 style="margin-top: 0; text-align: center;">Audio Settings</h3>
 
-        <div>
-            <label style="display: block;">
-                Beep Duration: <span id="duration-value">100</span>ms
-                <input type="range" min="50" max="500" value="100" step="10" oninput="updateBeepDuration(this.value)"
-                    style="width: 100%;">
-            </label>
+            <div style="margin-bottom: 10px;">
+                <label style="display: block;">
+                    Motion Threshold: <span id="threshold-value">0.10</span>
+                    <input type="range" min="0.01" max="0.5" value="0.10" step="0.01"
+                        oninput="updateThreshold(this.value)" style="width: 100%;">
+                </label>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <label style="display: block;">
+                    Idle Beep Interval: <span id="interval-value">1000</span>ms
+                    <input type="range" min="200" max="5000" value="1000" step="100"
+                        oninput="updateBeepInterval(this.value)" style="width: 100%;">
+                </label>
+            </div>
+
+            <div>
+                <label style="display: block;">
+                    Beep Duration: <span id="duration-value">100</span>ms
+                    <input type="range" min="50" max="500" value="100" step="10"
+                        oninput="updateBeepDuration(this.value)" style="width: 100%;">
+                </label>
+            </div>
         </div>
     </div>
 
@@ -85,20 +129,28 @@
 
     <script src="spatialAudio.js"></script>
     <script>
-        const audioManager = new SpatialAudioManager({
-            motionThreshold: 0.02,
-            idleBeepInterval: 3000
-        });
+        let ctx;
+        let isAudioInit = false;
+        let MOTION_THRESHOLD = 0.10;
+        let IDLE_BEEP_INTERVAL = 1000;
+        let BEEP_DURATION = 100;
+        const activeSounds = {};
 
-        // Initialize UI with manager defaults
-        document.getElementById('threshold-value').innerText = audioManager.MOTION_THRESHOLD.toFixed(2);
-        document.getElementById('interval-value').innerText = audioManager.IDLE_BEEP_INTERVAL;
-        document.querySelector('input[oninput*="updateThreshold"]').value = audioManager.MOTION_THRESHOLD;
-        document.querySelector('input[oninput*="updateBeepInterval"]').value = audioManager.IDLE_BEEP_INTERVAL;
+        // Frequencies
+        const TAG_FREQUENCIES = {
+            0: 261.63, 1: 293.66, 2: 329.63,
+            3: 349.23, 4: 392.00, 5: 440.00,
+            "default": 100.00
+        };
 
         const socket = new WebSocket('ws://localhost:8765');
         const statusDiv = document.getElementById('connection-status');
         const listDiv = document.getElementById('active-tags-list');
+
+        // Radar Setup
+        const radarCanvas = document.getElementById('radarCanvas');
+        const radarCtx = radarCanvas.getContext('2d');
+        const radarText = document.getElementById('radar-text');
 
         // --- UI HANDLERS ---
         function updateThreshold(val) {
@@ -126,33 +178,43 @@
             const visibleTags = JSON.parse(event.data);
             const visibleIds = new Set();
             let html = "";
+            let locationDescription = "";
+
+            drawRadarGrid();
 
             visibleTags.forEach(tag => {
                 visibleIds.add(tag.id);
+                const rawX = tag.pose[0];
+                const rawZ = tag.pose[2];
 
-                const x = tag.pose[0] * 5;
-                const y = -tag.pose[1] * 5;
-                const z = Math.abs(tag.pose[2]);
+                // Audio Scale
+                const audioX = rawX * 5;
+                const audioY = -tag.pose[1] * 5;
+                const audioZ = Math.abs(rawZ);
+
+                // Draw on Semi-Circle Radar
+                drawRadarDot(rawX, rawZ, tag.id);
+                locationDescription = getDirectionText(rawX, rawZ);
+
+                if (!activeSounds[tag.id]) {
+                    createSound(tag.id, audioX, audioY, audioZ);
+                }
+                updateSoundPosition(tag.id, audioX, audioY, audioZ);
 
                 const sound = audioManager.activeSounds[tag.id];
                 const statusColor = (sound && sound.isMoving) ? "#0f0" : "#ff0";
                 const statusText = (sound && sound.isMoving) ? "Moving" : "Idle";
-
                 html += `
                     <div class="tag-card">
                         <div style="font-size:1.5em; color:${statusColor}">${tag.id}</div>
                         <div style="font-size:0.8em">${statusText}</div>
-                        <div style="font-size:0.8em">X: ${x.toFixed(1)}</div>
+                        <div style="font-size:0.8em">${locationDescription}</div>
                     </div>
                 `;
-
-                if (!audioManager.activeSounds[tag.id]) {
-                    audioManager.createSound(tag.id, x, y, z);
-                }
-                audioManager.updateSoundPosition(tag.id, x, y, z);
             });
 
             listDiv.innerHTML = html || "No tags visible";
+            radarText.innerText = visibleTags.length > 0 ? `Tag Detected: ${locationDescription}` : "Scanning...";
 
             for (const id in audioManager.activeSounds) {
                 if (!visibleIds.has(parseInt(id))) {
@@ -166,8 +228,158 @@
             statusDiv.style.color = "#f00";
         });
 
+        // --- UPDATED RADAR FUNCTIONS (SEMI-CIRCLE) ---
+        function drawRadarGrid() {
+            const w = radarCanvas.width;
+            const h = radarCanvas.height;
+            const cx = w / 2;
+            const cy = h; // Center is now at the BOTTOM edge
+
+            radarCtx.clearRect(0, 0, w, h);
+
+            // Draw Semi-Circles (Arcs)
+            radarCtx.strokeStyle = '#004400';
+            radarCtx.lineWidth = 1;
+
+            // Arc params: x, y, radius, startAngle, endAngle
+            // Math.PI (180 deg) to 0 (0 deg) draws the top half
+            radarCtx.beginPath(); radarCtx.arc(cx, cy, 40, Math.PI, 0); radarCtx.stroke();
+            radarCtx.beginPath(); radarCtx.arc(cx, cy, 80, Math.PI, 0); radarCtx.stroke();
+            radarCtx.beginPath(); radarCtx.arc(cx, cy, 120, Math.PI, 0); radarCtx.stroke();
+
+            // Draw Angled Lines (FOV)
+            radarCtx.beginPath();
+            radarCtx.moveTo(cx, cy); radarCtx.lineTo(cx - 100, cy - 100); // Left diagonal
+            radarCtx.moveTo(cx, cy); radarCtx.lineTo(cx + 100, cy - 100); // Right diagonal
+            radarCtx.moveTo(cx, cy); radarCtx.lineTo(cx, cy - 140);       // Center line
+            radarCtx.stroke();
+
+            // Draw "You" (Green Cross at bottom)
+            radarCtx.strokeStyle = '#00ff00';
+            radarCtx.lineWidth = 2;
+            radarCtx.beginPath();
+            radarCtx.moveTo(cx - 10, cy - 5); radarCtx.lineTo(cx + 10, cy - 5);
+            radarCtx.moveTo(cx, cy - 15); radarCtx.lineTo(cx, cy + 5);
+            radarCtx.stroke();
+        }
+
+        function drawRadarDot(x_meters, z_meters, id) {
+            const w = radarCanvas.width;
+            const h = radarCanvas.height;
+            const cx = w / 2;
+            const cy = h; // Bottom edge
+
+            // Scale: 75px per meter
+            const scale = 80;
+
+            // X calculation remains the same
+            const plotX = cx + (x_meters * scale);
+
+            // Z calculation: subtract from bottom (cy) to go UP
+            const plotY = cy - (z_meters * scale);
+
+            // Draw Dot
+            radarCtx.fillStyle = '#ff0000';
+            radarCtx.beginPath();
+            radarCtx.arc(plotX, plotY, 6, 0, 2 * Math.PI);
+            radarCtx.fill();
+
+            // Draw ID Text
+            radarCtx.fillStyle = '#fff';
+            radarCtx.font = '12px Arial';
+            radarCtx.fillText(`ID:${id}`, plotX + 8, plotY - 8);
+        }
+
+        function getDirectionText(x, z) {
+            let hDir = "", vDir = "";
+            if (x < -0.2) hDir = "Left"; else if (x > 0.2) hDir = "Right"; else hDir = "Center";
+            if (z < 0.5) vDir = "Close"; else if (z > 1.5) vDir = "Far"; else vDir = "Mid";
+            return `${vDir}-${hDir}`;
+        }
+
+        // --- AUDIO ENGINE (Standard) ---
         async function initAudio() {
-            await audioManager.init();
+            if (ctx) return;
+            ctx = new (window.AudioContext || window.webkitAudioContext)();
+            isAudioInit = true;
+            console.log("Audio Engine Started");
+            drawRadarGrid();
+            requestAnimationFrame(audioLoop);
+        }
+
+        function createSound(id, x, y, z) {
+            const freq = TAG_FREQUENCIES[id] || TAG_FREQUENCIES["default"];
+            const osc = ctx.createOscillator();
+            osc.type = "sawtooth";
+            osc.frequency.value = freq;
+            const gain = ctx.createGain();
+            gain.gain.value = 0;
+            const panner = new PannerNode(ctx, {
+                panningModel: "HRTF", distanceModel: "exponential",
+                positionX: x, positionY: y, positionZ: z,
+                refDistance: 1, maxDistance: 100, rolloffFactor: 1.5,
+            });
+            osc.connect(gain).connect(panner).connect(ctx.destination);
+            osc.start();
+            activeSounds[id] = {
+                osc, panner, gain,
+                lastX: x, lastY: y, lastZ: z,
+                lastMoveTime: Date.now(), lastBeepTime: 0,
+                isMoving: false, isBeeping: false
+            };
+        }
+
+        function updateSoundPosition(id, x, y, z) {
+            const sound = activeSounds[id];
+            if (!sound) return;
+            const dx = x - sound.lastX;
+            const dy = y - sound.lastY;
+            const dz = z - sound.lastZ;
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            sound.isMoving = dist > MOTION_THRESHOLD;
+            sound.lastX = x; sound.lastY = y; sound.lastZ = z;
+            sound.panner.positionX.setTargetAtTime(x, ctx.currentTime, 0.03);
+            sound.panner.positionY.setTargetAtTime(y, ctx.currentTime, 0.03);
+            sound.panner.positionZ.setTargetAtTime(z, ctx.currentTime, 0.03);
+        }
+
+        function audioLoop() {
+            const now = Date.now();
+            for (const id in activeSounds) {
+                const sound = activeSounds[id];
+                if (sound.isMoving) {
+                    sound.gain.gain.setTargetAtTime(0.1, ctx.currentTime, 0.02);
+                } else {
+                    if (!sound.isBeeping) sound.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
+                    if (now - sound.lastBeepTime > IDLE_BEEP_INTERVAL) {
+                        triggerBeep(sound);
+                        sound.lastBeepTime = now;
+                    }
+                }
+            }
+            requestAnimationFrame(audioLoop);
+        }
+
+        function triggerBeep(sound) {
+            const now = ctx.currentTime;
+            sound.isBeeping = true;
+            sound.gain.gain.cancelScheduledValues(now);
+            sound.gain.gain.setValueAtTime(sound.gain.gain.value, now);
+            sound.gain.gain.linearRampToValueAtTime(0.1, now + 0.01);
+            sound.gain.gain.linearRampToValueAtTime(0.1, now + BEEP_DURATION / 1000);
+            sound.gain.gain.linearRampToValueAtTime(0, now + (BEEP_DURATION + 10) / 1000);
+            setTimeout(() => { sound.isBeeping = false; }, BEEP_DURATION + 20);
+        }
+
+        function removeSound(id) {
+            const sound = activeSounds[id];
+            if (!sound) return;
+            sound.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
+            setTimeout(() => {
+                sound.osc.stop(); sound.osc.disconnect();
+                sound.panner.disconnect(); sound.gain.disconnect();
+            }, 50);
+            delete activeSounds[id];
         }
     </script>
 </body>
