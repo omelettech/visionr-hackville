@@ -24,7 +24,7 @@ async def main():
         print("Could not read from webcam.")
         return
     h, w = frame.shape[:2]
-    camera_params = [w, w, w/2, h/2] # [fx, fy, cx, cy]
+    camera_params = [w, h, w/2, h/2] # [fx, fy, cx, cy]
 
     # 2. Setup Detector
     detector = pupil_apriltags.Detector(families='tag36h11', quad_decimate=2.0)
@@ -50,18 +50,30 @@ async def main():
                     # -- Visuals --
                     corners = detection.corners.astype(int)
                     cv2.polylines(frame, [corners], isClosed=True, color=(0, 255, 0), thickness=2)
-                    tag_name = tag_to_name.get(detection.tag_id, "Unknown")
-                    cv2.putText(frame, f"ID: {tag_name}", (corners[0][0], corners[0][1] - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
+                    # tag_name = tag_to_name.get(detection.tag_id, "Unknown")
+                    # cv2.putText(frame, f"ID: {tag_name}", (corners[0][0], corners[0][1] - 10),
+                    #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+######################################################################
+                    tag_id = tag_to_name.get(detection.tag_id, "Unknown")   
                     # -- Prepare Data to Send --
                     if detection.pose_t is not None:
+                        x, y, z = detection.pose_t.flatten()
+                
+                        # Z is the depth (distance from camera)
+                        pose_text = f"X: {x:.2f} Y: {y:.2f} Depth: {z:.2f}m Tag ID: {tag_id}"
+
+                        print(pose_text)
+                        
+                        cv2.putText(frame, pose_text, (corners[0][0] - 80, corners[0][1] - 50),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 100, 255), 2)
+######################################################################
                         # Flatten pose to a simple list [x, y, z]
                         pose = detection.pose_t.flatten().tolist()
                         
                         tag_info = {
                             "id": detection.tag_id,
-                            "name": tag_name,
+                            "name": tag_id,
                             "distance_m": round(pose[2], 3), # Z is depth
                             "pose": [round(n, 3) for n in pose]
                         }
