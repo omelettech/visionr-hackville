@@ -1,0 +1,11 @@
+[project]
+name = "hackvill"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "opencv-python>=4.12.0.88",
+    "pupil-apriltags>=1.0.4.post11",
+    "websockets>=16.0",
+]
