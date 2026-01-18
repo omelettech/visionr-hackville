@@ -264,6 +264,17 @@
 
     <script src="spatialAudio.js"></script>
     <script>
+        const TAG_NAMES = {
+            0: "Exit", 1: "Enter", 2: "Map",
+            3: "Room 1", 4: "Room 2", 5: "Room 3",
+            "default": "Unknown"
+        };
+        // Frequencies mapped to tags
+        const TAG_FREQUENCIES = {
+            0: 261.63, 1: 293.66, 2: 329.63,
+            3: 349.23, 4: 392.00, 5: 440.00,
+            "default": 100.00
+        };
         // --- GLOBALS ---
         const audioManager = new SpatialAudioManager({
             motionThreshold: 0.02,
