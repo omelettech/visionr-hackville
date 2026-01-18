@@ -1,133 +1,263 @@
 <!doctype html>
-<html>
+<html lang="en">
 
 <head>
-    <title>AprilTag Semi-Circle Radar</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visionr Audio System</title>
     <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-main: #e0e0e0;
+            --text-muted: #a0a0a0;
+            --accent: #00e676;
+            /* Modern bright green */
+            --accent-dim: rgba(0, 230, 118, 0.1);
+            --danger: #ff5252;
+        }
+
         body {
-            font-family: sans-serif;
-            padding: 20px;
-            background: #222;
-            color: #fff;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 40px;
             text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
         }
 
-        .status {
-            margin-bottom: 20px;
-            color: #888;
+        h2 {
+            font-weight: 300;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+            font-size: 1.8rem;
+            color: var(--accent);
         }
 
+        #connection-status {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 30px;
+            font-weight: 500;
+        }
+
+        /* BUTTON STYLING */
         button {
-            padding: 10px 20px;
-            font-size: 1.2em;
-            cursor: pointer;
-            background: #0f0;
+            background-color: var(--accent);
+            color: #000;
             border: none;
-            border-radius: 5px;
+            padding: 12px 30px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s;
+            margin-bottom: 40px;
+            letter-spacing: 0.5px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 230, 118, 0.4);
+            background-color: #00c853;
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        /* LAYOUT GRID */
+        .dashboard-wrapper {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
             margin-bottom: 20px;
         }
 
-        .dashboard-container {
+        /* CARDS */
+        .widget-box,
+        .settings-box,
+        .status-box {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
             display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 20px;
-            align-items: flex-start;
+            flex-direction: column;
+            align-items: center;
+            transition: border 0.3s;
+            border: 1px solid transparent;
         }
 
-        /* Styling for the Radar Widget */
-        .radar-widget {
-            background: #000;
-            border: 2px solid #0f0;
-            /* Border radius: Top-Left, Top-Right, Bottom-Right, Bottom-Left */
-            border-radius: 150px 150px 0 0;
-            width: 300px;
-            height: 150px;
-            /* Half height */
+        .widget-title {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            font-weight: 600;
+            width: 100%;
+            text-align: left;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+
+        /* CANVAS CONTAINERS */
+        .radar-view,
+        .hud-view {
             position: relative;
-            box-shadow: 0 -4px 15px rgba(0, 255, 0, 0.3);
-            display: flex;
-            justify-content: center;
-            align-items: flex-end;
-            /* Align canvas to bottom */
+            background: #181818;
+            /* Slightly darker for contrast */
+            border-radius: 12px;
             overflow: hidden;
+            border: 1px solid #333;
         }
 
-        #active-tags-list {
+        .radar-view {
+            border-radius: 150px 150px 0 0;
+            border-bottom: none;
+        }
+
+        .hud-overlay {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            font-size: 12px;
+            color: var(--accent);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 4px 8px;
+            border-radius: 4px;
+            pointer-events: none;
+        }
+
+        .meta-text {
+            margin-top: 15px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* SETTINGS & INPUTS */
+        .bottom-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        @media (max-width: 768px) {
+            .bottom-panel {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        label {
             display: flex;
-            justify-content: center;
-            gap: 10px;
-            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+            color: var(--text-main);
             width: 100%;
         }
 
-        .tag-card {
-            border: 1px solid #444;
-            background: #333;
-            padding: 10px;
-            border-radius: 8px;
-            width: 120px;
+        input[type=range] {
+            width: 60%;
+            accent-color: var(--accent);
+            cursor: pointer;
         }
 
-        .settings-box {
-            background: #333;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: left;
-            min-width: 300px;
+        .status-box {
+            align-items: flex-start;
+            min-height: 200px;
+        }
+
+        #active-tags-list div {
+            padding: 8px 0;
+            border-bottom: 1px solid #333;
+            width: 100%;
+            font-size: 0.9rem;
+        }
+
+        #active-tags-list div:last-child {
+            border-bottom: none;
         }
     </style>
 </head>
 
 <body>
-    <h2>AprilTag Radar (Front View)</h2>
+    <h2>Visionr Dev Dashboard</h2>
+    <div id="connection-status">Waiting for Signal...</div>
+    <button onclick="initAudio()">Enable System</button>
 
-    <div class="status" id="connection-status">Connecting to WebSocket...</div>
-
-    <button onclick="initAudio()">Enable Audio (Click Me First)</button>
-
-    <div class="dashboard-container">
-
-        <div style="text-align: center;">
-            <div class="radar-widget">
+    <div class="dashboard-wrapper">
+        <div class="widget-box">
+            <div class="widget-title">Top-Down Radar</div>
+            <div class="radar-view">
                 <canvas id="radarCanvas" width="300" height="150"></canvas>
             </div>
-            <div id="radar-text" style="margin-top: 10px; color: #0f0; font-family: monospace;">No Signal</div>
+            <div class="meta-text">Scan Range: 3.0 Meters</div>
         </div>
 
+        <div class="widget-box">
+            <div class="widget-title">Visual HUD</div>
+            <div class="hud-view">
+                <canvas id="hudCanvas" width="400" height="300"></canvas>
+                <div class="hud-overlay" id="hud-text">No Targets</div>
+            </div>
+            <div class="meta-text">FOV: 60°</div>
+        </div>
+    </div>
+
+    <div class="bottom-panel">
         <div class="settings-box">
-            <h3 style="margin-top: 0; text-align: center;">Audio Settings</h3>
+            <div class="widget-title">Audio Configuration</div>
 
-            <div style="margin-bottom: 10px;">
-                <label style="display: block;">
-                    Motion Threshold: <span id="threshold-value">0.10</span>
-                    <input type="range" min="0.01" max="0.5" value="0.10" step="0.01"
-                        oninput="updateThreshold(this.value)" style="width: 100%;">
-                </label>
+            <label>
+                <span>Motion Sensitivity</span>
+                <input type="range" min="0.01" max="0.5" value="0.10" step="0.01" oninput="updateThreshold(this.value)">
+            </label>
+            <div
+                style="font-size:0.8em; color:var(--text-muted); margin-top:-10px; margin-bottom:15px; text-align:right; width:100%">
+                <span id="threshold-value">0.10</span>
             </div>
 
-            <div style="margin-bottom: 10px;">
-                <label style="display: block;">
-                    Idle Beep Interval: <span id="interval-value">1000</span>ms
-                    <input type="range" min="200" max="5000" value="1000" step="100"
-                        oninput="updateBeepInterval(this.value)" style="width: 100%;">
-                </label>
+            <label>
+                <span>Idle Interval (ms)</span>
+                <input type="range" min="200" max="5000" value="1000" step="100"
+                    oninput="updateBeepInterval(this.value)">
+            </label>
+            <div
+                style="font-size:0.8em; color:var(--text-muted); margin-top:-10px; margin-bottom:15px; text-align:right; width:100%">
+                <span id="interval-value">1000</span>
             </div>
 
-            <div>
-                <label style="display: block;">
-                    Beep Duration: <span id="duration-value">100</span>ms
-                    <input type="range" min="50" max="500" value="100" step="10"
-                        oninput="updateBeepDuration(this.value)" style="width: 100%;">
-                </label>
+            <label>
+                <span>Beep Duration (ms)</span>
+                <input type="range" min="50" max="500" value="100" step="10" oninput="updateBeepDuration(this.value)">
+            </label>
+            <div
+                style="font-size:0.8em; color:var(--text-muted); margin-top:-10px; margin-bottom:0px; text-align:right; width:100%">
+                <span id="duration-value">100</span>
+            </div>
+        </div>
+
+        <div class="status-box">
+            <div class="widget-title">Active Targets</div>
+            <div id="active-tags-list" style="width: 100%;">
+                <div style="color: var(--text-muted); font-style: italic;">Awaiting Data...</div>
             </div>
         </div>
     </div>
 
-    <h3>Active Tags</h3>
-    <div id="active-tags-list">Waiting for tags...</div>
-
     <script>
+        // --- GLOBALS ---
         let ctx;
         let isAudioInit = false;
         let MOTION_THRESHOLD = 0.10;
@@ -135,40 +265,40 @@
         let BEEP_DURATION = 100;
         const activeSounds = {};
 
-        // Frequencies
+        const TAG_NAMES = {
+            0: "Exit", 1: "Enter", 2: "Map",
+            3: "Room 1", 4: "Room 2", 5: "Room 3",
+            "default": "Unknown"
+        };
+
+        // Frequencies mapped to tags
         const TAG_FREQUENCIES = {
             0: 261.63, 1: 293.66, 2: 329.63,
             3: 349.23, 4: 392.00, 5: 440.00,
             "default": 100.00
         };
 
+        // --- CANVAS SETUP ---
+        const radarCanvas = document.getElementById('radarCanvas');
+        const radarCtx = radarCanvas.getContext('2d');
+        const hudCanvas = document.getElementById('hudCanvas');
+        const hudCtx = hudCanvas.getContext('2d');
+        const hudText = document.getElementById('hud-text');
+
+        // --- WEBSOCKET ---
         const socket = new WebSocket('ws://localhost:8765');
         const statusDiv = document.getElementById('connection-status');
         const listDiv = document.getElementById('active-tags-list');
 
-        // Radar Setup
-        const radarCanvas = document.getElementById('radarCanvas');
-        const radarCtx = radarCanvas.getContext('2d');
-        const radarText = document.getElementById('radar-text');
+        function updateThreshold(val) { MOTION_THRESHOLD = parseFloat(val); document.getElementById('threshold-value').innerText = val; }
+        function updateBeepInterval(val) { IDLE_BEEP_INTERVAL = parseInt(val); document.getElementById('interval-value').innerText = val; }
+        function updateBeepDuration(val) { BEEP_DURATION = parseInt(val); document.getElementById('duration-value').innerText = val; }
 
-        // --- UI HANDLERS ---
-        function updateThreshold(val) {
-            MOTION_THRESHOLD = parseFloat(val);
-            document.getElementById('threshold-value').innerText = MOTION_THRESHOLD.toFixed(2);
-        }
-        function updateBeepInterval(val) {
-            IDLE_BEEP_INTERVAL = parseInt(val);
-            document.getElementById('interval-value').innerText = IDLE_BEEP_INTERVAL;
-        }
-        function updateBeepDuration(val) {
-            BEEP_DURATION = parseInt(val);
-            document.getElementById('duration-value').innerText = BEEP_DURATION;
-        }
-
-        // --- WEBSOCKET LOGIC ---
         socket.addEventListener('open', () => {
-            statusDiv.innerText = "Connected to Python Server";
-            statusDiv.style.color = "#0f0";
+            statusDiv.innerText = "● System Online";
+            statusDiv.style.color = "#00e676";
+            drawRadarGrid();
+            drawHUDGrid();
         });
 
         socket.addEventListener('message', (event) => {
@@ -177,139 +307,191 @@
             const visibleTags = JSON.parse(event.data);
             const visibleIds = new Set();
             let html = "";
-            let locationDescription = "";
 
+            // 1. Clear Canvases
             drawRadarGrid();
+            drawHUDGrid();
 
             visibleTags.forEach(tag => {
                 visibleIds.add(tag.id);
+
+                // Data mapping
                 const rawX = tag.pose[0];
+                const rawY = tag.pose[1];
                 const rawZ = tag.pose[2];
 
-                // Audio Scale
-                const audioX = rawX * 5;
-                const audioY = -tag.pose[1] * 5;
-                const audioZ = Math.abs(rawZ);
+                // 2. Draw Visuals
+                drawRadarDot(rawX, rawZ, TAG_NAMES[tag.id], tag.id);
+                drawHUDTarget(rawX, rawY, rawZ, TAG_NAMES[tag.id], tag.id);
 
-                // Draw on Semi-Circle Radar
-                drawRadarDot(rawX, rawZ, tag.id);
-                locationDescription = getDirectionText(rawX, rawZ);
+                // 3. Audio Update
+                const audioX = rawX * 5;
+                const audioY = -rawY * 5;
+                const audioZ = Math.abs(rawZ);
 
                 if (!activeSounds[tag.id]) {
                     createSound(tag.id, audioX, audioY, audioZ);
                 }
                 updateSoundPosition(tag.id, audioX, audioY, audioZ);
 
+                // 4. Update List HTML
                 const sound = activeSounds[tag.id];
-                const statusColor = (sound && sound.isMoving) ? "#0f0" : "#ff0";
-                const statusText = (sound && sound.isMoving) ? "Moving" : "Idle";
-                html += `
-                    <div class="tag-card">
-                        <div style="font-size:1.5em; color:${statusColor}">${tag.id}</div>
-                        <div style="font-size:0.8em">${statusText}</div>
-                        <div style="font-size:0.8em">${locationDescription}</div>
-                    </div>
-                `;
+                const isActive = sound && sound.isMoving;
+                const statusColor = isActive ? "#00e676" : "#e0e0e0";
+                const icon = isActive ? "▶" : "•";
+
+                html += `<div style="display:flex; justify-content:space-between; color:${statusColor}">
+                            <span>${icon} <strong>${TAG_NAMES[tag.id] || "Unknown"}</strong> <small>(ID:${tag.id})</small></span>
+                            <span>${rawZ.toFixed(2)}m</span>
+                         </div>`;
             });
 
-            listDiv.innerHTML = html || "No tags visible";
-            radarText.innerText = visibleTags.length > 0 ? `Tag Detected: ${locationDescription}` : "Scanning...";
+            listDiv.innerHTML = html || `<div style="color: var(--text-muted); font-style: italic;">No targets detected</div>`;
+            hudText.innerText = visibleTags.length > 0 ? `${visibleTags.length} Targets Active` : "No Targets";
 
+            // Cleanup
             for (const id in activeSounds) {
-                if (!visibleIds.has(parseInt(id))) {
-                    removeSound(id);
-                }
+                if (!visibleIds.has(parseInt(id))) removeSound(id);
             }
         });
 
         socket.addEventListener('close', () => {
-            statusDiv.innerText = "Disconnected";
-            statusDiv.style.color = "#f00";
+            statusDiv.innerText = "● Connection Lost";
+            statusDiv.style.color = "#ff5252";
         });
 
-        // --- UPDATED RADAR FUNCTIONS (SEMI-CIRCLE) ---
+        // --- DRAWING: RADAR ---
         function drawRadarGrid() {
             const w = radarCanvas.width;
             const h = radarCanvas.height;
             const cx = w / 2;
-            const cy = h; // Center is now at the BOTTOM edge
+            const cy = h;
 
             radarCtx.clearRect(0, 0, w, h);
-
-            // Draw Semi-Circles (Arcs)
-            radarCtx.strokeStyle = '#004400';
             radarCtx.lineWidth = 1;
+            radarCtx.strokeStyle = '#333'; // Subtle grid color
 
-            // Arc params: x, y, radius, startAngle, endAngle
-            // Math.PI (180 deg) to 0 (0 deg) draws the top half
+            // Arcs
             radarCtx.beginPath(); radarCtx.arc(cx, cy, 40, Math.PI, 0); radarCtx.stroke();
             radarCtx.beginPath(); radarCtx.arc(cx, cy, 80, Math.PI, 0); radarCtx.stroke();
             radarCtx.beginPath(); radarCtx.arc(cx, cy, 120, Math.PI, 0); radarCtx.stroke();
 
-            // Draw Angled Lines (FOV)
+            // Diagonals
             radarCtx.beginPath();
-            radarCtx.moveTo(cx, cy); radarCtx.lineTo(cx - 100, cy - 100); // Left diagonal
-            radarCtx.moveTo(cx, cy); radarCtx.lineTo(cx + 100, cy - 100); // Right diagonal
-            radarCtx.moveTo(cx, cy); radarCtx.lineTo(cx, cy - 140);       // Center line
+            radarCtx.moveTo(cx, cy); radarCtx.lineTo(cx - 120, cy - 120);
+            radarCtx.moveTo(cx, cy); radarCtx.lineTo(cx + 120, cy - 120);
+            radarCtx.moveTo(cx, cy); radarCtx.lineTo(cx, cy - 140);
             radarCtx.stroke();
 
-            // Draw "You" (Green Cross at bottom)
-            radarCtx.strokeStyle = '#00ff00';
-            radarCtx.lineWidth = 2;
+            // Self (White Dot)
+            radarCtx.fillStyle = '#fff';
             radarCtx.beginPath();
-            radarCtx.moveTo(cx - 10, cy - 5); radarCtx.lineTo(cx + 10, cy - 5);
-            radarCtx.moveTo(cx, cy - 15); radarCtx.lineTo(cx, cy + 5);
-            radarCtx.stroke();
+            radarCtx.arc(cx, cy - 5, 3, 0, Math.PI * 2);
+            radarCtx.fill();
         }
 
-        function drawRadarDot(x_meters, z_meters, id) {
+        function drawRadarDot(x, z, name, id) {
             const w = radarCanvas.width;
-            const h = radarCanvas.height;
             const cx = w / 2;
-            const cy = h; // Bottom edge
+            const cy = radarCanvas.height;
+            const scale = 75;
 
-            // Scale: 75px per meter
-            const scale = 80;
+            const plotX = cx + (x * scale);
+            const plotY = cy - (z * scale);
 
-            // X calculation remains the same
-            const plotX = cx + (x_meters * scale);
-
-            // Z calculation: subtract from bottom (cy) to go UP
-            const plotY = cy - (z_meters * scale);
-
-            // Draw Dot
-            radarCtx.fillStyle = '#ff0000';
+            // Dot
+            radarCtx.fillStyle = '#00e676';
             radarCtx.beginPath();
-            radarCtx.arc(plotX, plotY, 6, 0, 2 * Math.PI);
+            radarCtx.arc(plotX, plotY, 4, 0, Math.PI * 2);
             radarCtx.fill();
 
-            // Draw ID Text
-            radarCtx.fillStyle = '#fff';
-            radarCtx.font = '12px Arial';
-            radarCtx.fillText(`ID:${id}`, plotX + 8, plotY - 8);
+            // Label
+            radarCtx.fillStyle = '#e0e0e0';
+            radarCtx.font = '10px Segoe UI';
+            radarCtx.fillText(name || id, plotX + 6, plotY + 3);
         }
 
-        function getDirectionText(x, z) {
-            let hDir = "", vDir = "";
-            if (x < -0.2) hDir = "Left"; else if (x > 0.2) hDir = "Right"; else hDir = "Center";
-            if (z < 0.5) vDir = "Close"; else if (z > 1.5) vDir = "Far"; else vDir = "Mid";
-            return `${vDir}-${hDir}`;
+        // --- DRAWING: HUD ---
+        function drawHUDGrid() {
+            const w = hudCanvas.width;
+            const h = hudCanvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+
+            hudCtx.clearRect(0, 0, w, h);
+            hudCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)'; // Very subtle
+            hudCtx.lineWidth = 1;
+
+            // Crosshair
+            hudCtx.strokeStyle = 'rgba(0, 230, 118, 0.5)';
+            hudCtx.beginPath();
+            hudCtx.moveTo(cx - 10, cy); hudCtx.lineTo(cx + 10, cy);
+            hudCtx.moveTo(cx, cy - 10); hudCtx.lineTo(cx, cy + 10);
+            hudCtx.stroke();
         }
 
-        // --- AUDIO ENGINE (Standard) ---
+        function drawHUDTarget(x, y, z, name, id) {
+            const w = hudCanvas.width;
+            const h = hudCanvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+            const scale = 200;
+
+            const screenX = cx + (x * scale);
+            const screenY = cy + (y * scale);
+
+            let size = 40 / z;
+            if (size > 80) size = 80;
+            if (size < 10) size = 10;
+
+            hudCtx.strokeStyle = '#00e676';
+            hudCtx.lineWidth = 2;
+
+            // Draw Corners (Minimal bracket style)
+            const gap = size / 2;
+
+            hudCtx.beginPath();
+            // Top Left
+            hudCtx.moveTo(screenX - size, screenY - size + gap);
+            hudCtx.lineTo(screenX - size, screenY - size);
+            hudCtx.lineTo(screenX - size + gap, screenY - size);
+            // Bottom Right
+            hudCtx.moveTo(screenX + size, screenY + size - gap);
+            hudCtx.lineTo(screenX + size, screenY + size);
+            hudCtx.lineTo(screenX + size - gap, screenY + size);
+            hudCtx.stroke();
+
+            // Label
+            hudCtx.fillStyle = '#fff';
+            hudCtx.font = 'bold 11px Segoe UI';
+            hudCtx.fillText(name || id, screenX + size + 5, screenY - 5);
+            hudCtx.fillStyle = '#a0a0a0';
+            hudCtx.font = '10px Segoe UI';
+            hudCtx.fillText(`${z.toFixed(2)}m`, screenX + size + 5, screenY + 8);
+        }
+
+        // --- AUDIO ENGINE ---
         async function initAudio() {
             if (ctx) return;
             ctx = new (window.AudioContext || window.webkitAudioContext)();
             isAudioInit = true;
-            console.log("Audio Engine Started");
+            console.log("Audio Engine Initialized");
+
+            const btn = document.querySelector('button');
+            btn.innerText = "System Active";
+            btn.style.backgroundColor = "#333";
+            btn.style.color = "#00e676";
+            btn.disabled = true;
+
             drawRadarGrid();
+            drawHUDGrid();
             requestAnimationFrame(audioLoop);
         }
 
         function createSound(id, x, y, z) {
             const freq = TAG_FREQUENCIES[id] || TAG_FREQUENCIES["default"];
             const osc = ctx.createOscillator();
-            osc.type = "sawtooth";
+            osc.type = "sine"; // Softer sound than sawtooth
             osc.frequency.value = freq;
             const gain = ctx.createGain();
             gain.gain.value = 0;
@@ -320,26 +502,18 @@
             });
             osc.connect(gain).connect(panner).connect(ctx.destination);
             osc.start();
-            activeSounds[id] = {
-                osc, panner, gain,
-                lastX: x, lastY: y, lastZ: z,
-                lastMoveTime: Date.now(), lastBeepTime: 0,
-                isMoving: false, isBeeping: false
-            };
+            activeSounds[id] = { osc, panner, gain, lastX: x, lastY: y, lastZ: z, lastMoveTime: Date.now(), lastBeepTime: 0, isMoving: false, isBeeping: false };
         }
 
         function updateSoundPosition(id, x, y, z) {
             const sound = activeSounds[id];
             if (!sound) return;
-            const dx = x - sound.lastX;
-            const dy = y - sound.lastY;
-            const dz = z - sound.lastZ;
-            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            const dist = Math.sqrt(Math.pow(x - sound.lastX, 2) + Math.pow(y - sound.lastY, 2) + Math.pow(z - sound.lastZ, 2));
             sound.isMoving = dist > MOTION_THRESHOLD;
             sound.lastX = x; sound.lastY = y; sound.lastZ = z;
-            sound.panner.positionX.setTargetAtTime(x, ctx.currentTime, 0.03);
-            sound.panner.positionY.setTargetAtTime(y, ctx.currentTime, 0.03);
-            sound.panner.positionZ.setTargetAtTime(z, ctx.currentTime, 0.03);
+            sound.panner.positionX.setTargetAtTime(x, ctx.currentTime, 0.05);
+            sound.panner.positionY.setTargetAtTime(y, ctx.currentTime, 0.05);
+            sound.panner.positionZ.setTargetAtTime(z, ctx.currentTime, 0.05);
         }
 
         function audioLoop() {
@@ -350,23 +524,20 @@
                     sound.gain.gain.setTargetAtTime(0.1, ctx.currentTime, 0.02);
                 } else {
                     if (!sound.isBeeping) sound.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
-                    if (now - sound.lastBeepTime > IDLE_BEEP_INTERVAL) {
-                        triggerBeep(sound);
-                        sound.lastBeepTime = now;
-                    }
+                    if (now - sound.lastBeepTime > IDLE_BEEP_INTERVAL) triggerBeep(sound, now);
                 }
             }
             requestAnimationFrame(audioLoop);
         }
 
-        function triggerBeep(sound) {
-            const now = ctx.currentTime;
+        function triggerBeep(sound, now) {
             sound.isBeeping = true;
-            sound.gain.gain.cancelScheduledValues(now);
-            sound.gain.gain.setValueAtTime(sound.gain.gain.value, now);
-            sound.gain.gain.linearRampToValueAtTime(0.1, now + 0.01);
-            sound.gain.gain.linearRampToValueAtTime(0.1, now + BEEP_DURATION / 1000);
-            sound.gain.gain.linearRampToValueAtTime(0, now + (BEEP_DURATION + 10) / 1000);
+            sound.lastBeepTime = now;
+            sound.gain.gain.cancelScheduledValues(ctx.currentTime);
+            sound.gain.gain.setValueAtTime(sound.gain.gain.value, ctx.currentTime);
+            sound.gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + 0.01);
+            sound.gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + BEEP_DURATION / 1000);
+            sound.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + (BEEP_DURATION + 10) / 1000);
             setTimeout(() => { sound.isBeeping = false; }, BEEP_DURATION + 20);
         }
 
