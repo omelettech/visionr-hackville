@@ -1,24 +1,24 @@
-#!/usr/bin/env python
-
-"""Client using the asyncio API."""
-
 import asyncio
 from websockets.asyncio.client import connect
+import json
 
+SERVER_URI = "ws://localhost:8765"
 
-async def hello():
-    async with connect("ws://localhost:8765") as websocket:
-        await websocket.send("Hello world!")
-        message = await websocket.recv()
-        print(message)
+async def listen():
+    print(f"Attempting to connect to {SERVER_URI}...")
+    
+    async with connect(SERVER_URI) as websocket:
+        print("Connected! Waiting for data...")
+        
+        # This loop runs forever, waiting for the server to push data
+        async for message in websocket:
+            data = json.loads(message)
+            print(f"Received update: {data}")
 
-async def send_data(data):
-    print("sending data")
-    async with connect("ws://localhost:8765") as websocket:
-        await websocket.send(data)
-        # message = await websocket.recv()
-        # print(message)
-        message = await websocket.recv()
-        print(message)
-        return message
-
+if __name__ == "__main__":
+    try:
+        asyncio.run(listen())
+    except ConnectionRefusedError:
+        print("Could not connect. Is the Server script running?")
+    except KeyboardInterrupt:
+        print("Stopped.")

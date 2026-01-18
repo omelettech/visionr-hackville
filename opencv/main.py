@@ -5,7 +5,7 @@ import json
 from websockets.asyncio.server import serve
 
 # --- CONFIGURATION ---
-TAG_SIZE = 0.0798
+TAG_SIZE = 0.08
 PORT = 8765
 tag_to_name = {
     0: "Exit",
@@ -49,6 +49,8 @@ async def camera_loop():
 
     print("Camera Loop Started. Waiting for tags...")
 
+    ws_sent_already = False
+
     while True:
         ret, frame = cap.read()
         if not ret: break
@@ -67,28 +69,39 @@ async def camera_loop():
 
             # Prepare Data
             if detection.pose_t is not None:
+                ws_sent_already = False
                 pose = detection.pose_t.flatten().tolist()
                 detected_data.append({
-                    "id": detection.tag_id,
+                    "id":detection.tag_id,
                     "z_distance": round(pose[2], 3),
                     "pose": [round(n, 3) for n in pose]
                 })
+            
+            
+
 
                 tag_id = tag_to_name.get(detection.tag_id, "Unknown")
                 cv2.putText(frame, f"ID: {tag_id}", (corners[0][0], corners[0][1] - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         # -- BROADCAST TO CLIENTS --
-        # Only do the work if we have clients and data
-        if CONNECTED_CLIENTS and detected_data:
-            message = json.dumps(detected_data)
-            
-            # Send to all connected clients
-            # We use a copy (list(CONNECTED_CLIENTS)) to avoid errors if a client disconnects mid-loop
-            for ws in list(CONNECTED_CLIENTS):
-                try:
-                    await ws.send(message)
-                except:
-                    pass # Connection errors are handled by the handler
+        if CONNECTED_CLIENTS:
+            if detected_data:
+                message = json.dumps(detected_data)
+                ws_sent_already = True
+                for ws in list(CONNECTED_CLIENTS):
+                    try:
+                        await ws.send(message)
+                    except:
+                        pass
+            elif ws_sent_already:
+                # Send one empty message to clear the state
+                message = json.dumps([])
+                ws_sent_already = False
+                for ws in list(CONNECTED_CLIENTS):
+                    try:
+                        await ws.send(message)
+                    except:
+                        pass
 
         # Show video locally
         cv2.imshow('Server View', frame)
