@@ -8,7 +8,7 @@ class SpatialAudioManager {
         this.isAudioInit = false;
 
         // Settings
-        this.MOTION_THRESHOLD = options.motionThreshold || 0.02; // Capped at 0.02 as per user request
+        this.MOTION_THRESHOLD = options.motionThreshold || 0.04; // Capped at 0.02 as per user request
         this.IDLE_BEEP_INTERVAL = options.idleBeepInterval || 3000; // 3 seconds as per user request
         this.BEEP_DURATION = options.beepDuration || 100;
         this.BASE_VOLUME = options.baseVolume || 1; // Increased base volume from 0.1 to 0.5
@@ -53,7 +53,7 @@ class SpatialAudioManager {
             positionY: y,
             positionZ: z,
             refDistance: 1,
-            maxDistance: 100,
+            maxDistance: 1000,
             rolloffFactor: 1,
         });
 
@@ -113,23 +113,27 @@ class SpatialAudioManager {
 
     _startLoop() {
         const loop = () => {
-            const now = Date.now();
+            if (!this.isAudioInit) return;
+            const now = this.ctx.currentTime;
+
             for (const id in this.activeSounds) {
                 const sound = this.activeSounds[id];
 
                 if (sound.isMoving) {
                     // Continuous sound (Immediate ramp up to base volume)
-                    sound.gain.gain.setTargetAtTime(this.BASE_VOLUME, this.ctx.currentTime, 0.02);
+                    sound.gain.gain.setTargetAtTime(this.BASE_VOLUME, now, 0.02);
+                    // Reset beep timer so it doesn't fire immediately when stopping
+                    sound.lastBeepTime = now;
                 } else {
                     // Stationary logic
                     if (!sound.isBeeping) {
-                        sound.gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.02);
-                    }
+                        sound.gain.gain.setTargetAtTime(0, now, 0.02);
 
-                    // Periodic Beep
-                    if (now - sound.lastBeepTime > this.IDLE_BEEP_INTERVAL) {
-                        this.triggerBeep(sound);
-                        sound.lastBeepTime = now;
+                        // Periodic Beep (Compare in seconds)
+                        if (now - sound.lastBeepTime > this.IDLE_BEEP_INTERVAL / 1000) {
+                            this.triggerBeep(id);
+                            sound.lastBeepTime = now;
+                        }
                     }
                 }
             }
@@ -138,18 +142,29 @@ class SpatialAudioManager {
         requestAnimationFrame(loop);
     }
 
-    triggerBeep(sound) {
+    triggerBeep(id) {
+        const sound = this.activeSounds[id];
+        if (!sound) return;
+
         const now = this.ctx.currentTime;
+        console.log(`[Audio] Triggering Beep for Tag ${id}`);
+
         sound.isBeeping = true;
         sound.gain.gain.cancelScheduledValues(now);
         sound.gain.gain.setValueAtTime(sound.gain.gain.value, now);
+
+        // Pulse up
         sound.gain.gain.linearRampToValueAtTime(this.BASE_VOLUME, now + 0.01);
-        sound.gain.gain.linearRampToValueAtTime(this.BASE_VOLUME, now + this.BEEP_DURATION / 1000);
+        // Hold
+        sound.gain.gain.linearRampToValueAtTime(this.BASE_VOLUME, now + (this.BEEP_DURATION / 1000));
+        // Pulse down
         sound.gain.gain.linearRampToValueAtTime(0, now + (this.BEEP_DURATION + 10) / 1000);
 
         setTimeout(() => {
-            sound.isBeeping = false;
-        }, this.BEEP_DURATION + 20);
+            if (this.activeSounds[id]) {
+                this.activeSounds[id].isBeeping = false;
+            }
+        }, this.BEEP_DURATION + 50);
     }
 
     // Settings Updates
