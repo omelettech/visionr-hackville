@@ -51,6 +51,35 @@
 
     <button onclick="initAudio()">Enable Audio (Click Me First)</button>
 
+    <div
+        style="margin: 20px 0; padding: 15px; background: #333; border-radius: 8px; display: inline-block; text-align: left; min-width: 300px;">
+        <h3 style="margin-top: 0; text-align: center;">Audio Settings</h3>
+
+        <div style="margin-bottom: 10px;">
+            <label style="display: block;">
+                Motion Threshold (Shake Filter): <span id="threshold-value">0.10</span>
+                <input type="range" min="0.01" max="0.5" value="0.10" step="0.01" oninput="updateThreshold(this.value)"
+                    style="width: 100%;">
+            </label>
+        </div>
+
+        <div style="margin-bottom: 10px;">
+            <label style="display: block;">
+                Idle Beep Interval: <span id="interval-value">1000</span>ms
+                <input type="range" min="200" max="5000" value="1000" step="100"
+                    oninput="updateBeepInterval(this.value)" style="width: 100%;">
+            </label>
+        </div>
+
+        <div>
+            <label style="display: block;">
+                Beep Duration: <span id="duration-value">100</span>ms
+                <input type="range" min="50" max="500" value="100" step="10" oninput="updateBeepDuration(this.value)"
+                    style="width: 100%;">
+            </label>
+        </div>
+    </div>
+
     <h3>Active Tags</h3>
     <div id="active-tags-list">Waiting for tags...</div>
 
@@ -58,8 +87,13 @@
         let ctx;
         let isAudioInit = false;
 
+        // Settings (Defaults)
+        let MOTION_THRESHOLD = 0.10;
+        let IDLE_BEEP_INTERVAL = 1000; // ms
+        let BEEP_DURATION = 100; // ms
+
         // Store active audio nodes here: 
-        // { tagId: { osc, panner, gain, lastSeenTime } }
+        // { tagId: { osc, panner, gain, lastX, lastY, lastZ, lastMoveTime, lastBeepTime, isMoving, isBeeping } }
         const activeSounds = {};
 
         // Map Tag IDs to Frequencies (Notes)
@@ -77,6 +111,20 @@
         const statusDiv = document.getElementById('connection-status');
         const listDiv = document.getElementById('active-tags-list');
 
+        // --- UI HANDLERS ---
+        function updateThreshold(val) {
+            MOTION_THRESHOLD = parseFloat(val);
+            document.getElementById('threshold-value').innerText = MOTION_THRESHOLD.toFixed(2);
+        }
+        function updateBeepInterval(val) {
+            IDLE_BEEP_INTERVAL = parseInt(val);
+            document.getElementById('interval-value').innerText = IDLE_BEEP_INTERVAL;
+        }
+        function updateBeepDuration(val) {
+            BEEP_DURATION = parseInt(val);
+            document.getElementById('duration-value').innerText = BEEP_DURATION;
+        }
+
         // --- WEBSOCKET LOGIC ---
 
         socket.addEventListener('open', () => {
@@ -85,46 +133,40 @@
         });
 
         socket.addEventListener('message', (event) => {
-            if (!isAudioInit) return; // Don't process until user clicks button
+            if (!isAudioInit) return;
 
             const visibleTags = JSON.parse(event.data);
             const visibleIds = new Set();
             let html = "";
 
-            // 1. Process Visible Tags (Create or Update)
             visibleTags.forEach(tag => {
                 visibleIds.add(tag.id);
 
-                // Coordinates
                 const x = tag.pose[0] * 5;
                 const y = -tag.pose[1] * 5;
                 const z = Math.abs(tag.pose[2]);
 
-                // Update UI HTML
+                const sound = activeSounds[tag.id];
+                const statusColor = (sound && sound.isMoving) ? "#0f0" : "#ff0";
+                const statusText = (sound && sound.isMoving) ? "Moving" : "Idle";
+
                 html += `
                     <div class="tag-card">
-                        <div style="font-size:1.5em; color:#0f0">${tag.id}</div>
+                        <div style="font-size:1.5em; color:${statusColor}">${tag.id}</div>
+                        <div style="font-size:0.8em">${statusText}</div>
                         <div style="font-size:0.8em">X: ${x.toFixed(1)}</div>
-                        <div style="font-size:0.8em">Side: ${x < 0 ? 'Left' : 'Right'}</div>
                     </div>
                 `;
 
-                // Update Audio
                 if (!activeSounds[tag.id]) {
-                    // New tag found! Create a sound.
-                    createSound(tag.id);
+                    createSound(tag.id, x, y, z);
                 }
-
-                // Update position for this specific tag
                 updateSoundPosition(tag.id, x, y, z);
             });
 
             listDiv.innerHTML = html || "No tags visible";
 
-            // 2. Cleanup Missing Tags (Garbage Collection)
-            // If a tag was active but is not in the current visible list, remove it.
             for (const id in activeSounds) {
-                // Note: keys in objects are strings, need to convert to int for comparison
                 if (!visibleIds.has(parseInt(id))) {
                     removeSound(id);
                 }
@@ -143,69 +185,122 @@
             ctx = new (window.AudioContext || window.webkitAudioContext)();
             isAudioInit = true;
             console.log("Audio Engine Started");
+            requestAnimationFrame(audioLoop);
         }
 
-        function createSound(id) {
+        function createSound(id, x, y, z) {
             const freq = TAG_FREQUENCIES[id] || TAG_FREQUENCIES["default"];
 
-            // 1. Oscillator (Source)
             const osc = ctx.createOscillator();
             osc.type = "sawtooth";
             osc.frequency.value = freq;
 
-            // 2. Gain Node (Volume control for fading in/out)
             const gain = ctx.createGain();
-            gain.gain.value = 0; // Start silent, fade in
+            gain.gain.value = 0;
 
-            // 3. Panner Node (3D Position)
             const panner = new PannerNode(ctx, {
                 panningModel: "HRTF",
                 distanceModel: "exponential",
-                positionX: 0,
-                positionY: 0,
-                positionZ: 1,
+                positionX: x,
+                positionY: y,
+                positionZ: z,
                 refDistance: 1,
                 maxDistance: 100,
                 rolloffFactor: 1.5,
             });
 
-            // Connect: Osc -> Gain -> Panner -> Speakers
             osc.connect(gain).connect(panner).connect(ctx.destination);
             osc.start();
 
-            // Fade in volume over 0.1s to avoid clicking
-            gain.gain.setTargetAtTime(0.1, ctx.currentTime, 0.1);
-
-            // Save to our active map
-            activeSounds[id] = { osc, panner, gain };
+            activeSounds[id] = {
+                osc, panner, gain,
+                lastX: x, lastY: y, lastZ: z,
+                lastMoveTime: Date.now(),
+                lastBeepTime: 0,
+                isMoving: false,
+                isBeeping: false
+            };
         }
 
         function updateSoundPosition(id, x, y, z) {
             const sound = activeSounds[id];
             if (!sound) return;
 
-            const timeConstant = 0.1;
+            // Calculate distance moved
+            const dx = x - sound.lastX;
+            const dy = y - sound.lastY;
+            const dz = z - sound.lastZ;
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+            // Instant state switch
+            sound.isMoving = dist > MOTION_THRESHOLD;
+
+            sound.lastX = x;
+            sound.lastY = y;
+            sound.lastZ = z;
+
+            // Highly responsive tracking (reduced time constant)
+            const timeConstant = 0.03;
             sound.panner.positionX.setTargetAtTime(x, ctx.currentTime, timeConstant);
             sound.panner.positionY.setTargetAtTime(y, ctx.currentTime, timeConstant);
             sound.panner.positionZ.setTargetAtTime(z, ctx.currentTime, timeConstant);
+        }
+
+        function audioLoop() {
+            const now = Date.now();
+
+            for (const id in activeSounds) {
+                const sound = activeSounds[id];
+
+                if (sound.isMoving) {
+                    // Continuous sound (Immediate ramp up)
+                    sound.gain.gain.setTargetAtTime(0.1, ctx.currentTime, 0.02);
+                } else {
+                    // Immediate ramp down when stationary
+                    if (!sound.isBeeping) {
+                        sound.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
+                    }
+
+                    // Periodic Beep
+                    if (now - sound.lastBeepTime > IDLE_BEEP_INTERVAL) {
+                        triggerBeep(sound);
+                        sound.lastBeepTime = now;
+                    }
+                }
+            }
+            requestAnimationFrame(audioLoop);
+        }
+
+        function triggerBeep(sound) {
+            const now = ctx.currentTime;
+            sound.isBeeping = true;
+            // Pulse gain: 0 -> 0.1 -> 0
+            sound.gain.gain.cancelScheduledValues(now);
+            sound.gain.gain.setValueAtTime(sound.gain.gain.value, now);
+            sound.gain.gain.linearRampToValueAtTime(0.1, now + 0.01);
+            sound.gain.gain.linearRampToValueAtTime(0.1, now + BEEP_DURATION / 1000);
+            sound.gain.gain.linearRampToValueAtTime(0, now + (BEEP_DURATION + 10) / 1000);
+
+            setTimeout(() => {
+                sound.isBeeping = false;
+            }, BEEP_DURATION + 20);
         }
 
         function removeSound(id) {
             const sound = activeSounds[id];
             if (!sound) return;
 
-            // 1. Fade out volume to 0 over 0.2s
-            sound.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.2);
+            // Instant cleanup for removed tags
+            sound.gain.gain.cancelScheduledValues(ctx.currentTime);
+            sound.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
 
-            // 2. Stop and disconnect after fade is done
             setTimeout(() => {
                 sound.osc.stop();
                 sound.osc.disconnect();
                 sound.panner.disconnect();
                 sound.gain.disconnect();
-            }, 250);
+            }, 50);
 
-            // 3. Remove from map immediately so we don't try to update it
             delete activeSounds[id];
         }
     </script>
