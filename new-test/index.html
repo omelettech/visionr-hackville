@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Realtime 3D Audio</title>
+        <style>
+            body {
+                font-family: sans-serif;
+                padding: 20px;
+                background: #222;
+                color: #fff;
+            }
+            .control {
+                margin: 10px 0;
+            }
+            label {
+                display: inline-block;
+                width: 30px;
+            }
+        </style>
+    </head>
+    <body>
+        <h2>3D Audio Positioner</h2>
+        <button onclick="initAudio()">Start Audio</button>
+
+        <div class="control">
+            <label>X</label>
+            <input
+                type="range"
+                min="-10"
+                max="10"
+                step="0.1"
+                value="0"
+                oninput="updatePos('x', this.value)"
+            />
+            <span id="val-x">0</span> (Left/Right)
+        </div>
+        <div class="control">
+            <label>Y</label>
+            <input
+                type="range"
+                min="-10"
+                max="10"
+                step="0.1"
+                value="0"
+                oninput="updatePos('y', this.value)"
+            />
+            <span id="val-y">0</span> (Up/Down)
+        </div>
+        <div class="control">
+            <label>Z</label>
+            <input
+                type="range"
+                min="-10"
+                max="10"
+                step="0.1"
+                value="-1"
+                oninput="updatePos('z', this.value)"
+            />
+            <span id="val-z">-1</span> (Front/Back)
+        </div>
+
+        <script>
+            let ctx, panner;
+            const pos = { x: 0, y: 0, z: -1 };
+
+            async function initAudio() {
+                if (ctx) return;
+                ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+                // Create a sound source (Oscillator)
+                const oscillator = ctx.createOscillator();
+                oscillator.type = "sawtooth";
+                oscillator.frequency.setValueAtTime(440, ctx.currentTime);
+
+                // Create PannerNode for 3D spatialization
+                panner = new PannerNode(ctx, {
+                    panningModel: "HRTF", // High quality 3D audio
+                    distanceModel: "inverse", // Volume drops with distance
+                    positionX: pos.x,
+                    positionY: pos.y,
+                    positionZ: pos.z,
+                    refDistance: 1,
+                    maxDistance: 10000,
+                    rolloffFactor: 1,
+                });
+
+                // Connect: Source -> Panner -> Output
+                oscillator.connect(panner).connect(ctx.destination);
+                oscillator.start();
+            }
+
+            // Update position in real-time
+            function updatePos(axis, val) {
+                document.getElementById(`val-${axis}`).innerText = val;
+                pos[axis] = parseFloat(val);
+
+                if (panner) {
+                    // Time constant prevents clicking artifacts
+                    panner[`position${axis.toUpperCase()}`].setTargetAtTime(
+                        pos[axis],
+                        ctx.currentTime,
+                        0.1,
+                    );
+                }
+            }
+        </script>
+    </body>
+</html>
