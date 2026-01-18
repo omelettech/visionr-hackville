@@ -10,12 +10,30 @@
 <body>
   <div id="app">
     <h1>Spatial Audio Player</h1>
-    <button id="start-btn">Start Simulation</button>
+
+    <div class="controls-row">
+      <button id="start-btn">Start Audio</button>
+      <label>
+        <input type="checkbox" id="websocket-toggle">
+        Use WebSocket (AprilTag)
+      </label>
+    </div>
+
     <div id="status">Status: Idle</div>
+    <div id="websocket-status" style="display: none;">WebSocket: Disconnected</div>
+
+    <div class="tag-info" id="tag-info" style="display: none;">
+      <h3>AprilTag Data</h3>
+      <div>Tag ID: <span id="tag-id">-</span></div>
+      <div>X: <span id="val-x">0.00</span>m</div>
+      <div>Y: <span id="val-y">0.00</span>m</div>
+      <div>Distance: <span id="val-z">0.00</span>m</div>
+    </div>
+
     <div class="vis-container">
       <canvas id="vis-canvas" width="800" height="500"></canvas>
     </div>
-    <p class="instruction">Sound moves based on simulated 3D position.</p>
+    <p class="instruction">Sound moves based on simulated 3D position or AprilTag tracking.</p>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

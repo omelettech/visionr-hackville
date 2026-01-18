@@ -68,3 +68,62 @@ button:focus-visible {
   color: #888;
   font-size: 0.9em;
 }
+
+.controls-row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+.controls-row label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+#status,
+#websocket-status {
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+#status {
+  background: rgba(100, 108, 255, 0.1);
+}
+
+#websocket-status {
+  background: rgba(255, 100, 100, 0.1);
+}
+
+.tag-info {
+  margin: 1rem auto;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  max-width: 400px;
+}
+
+.tag-info h3 {
+  margin-top: 0;
+  font-size: 1.2em;
+  color: #646cff;
+}
+
+.tag-info div {
+  margin: 0.5rem 0;
+  text-align: left;
+}
+
+.tag-info span {
+  font-weight: bold;
+  color: #9089fc;
+}
+
+.vis-container {
+  margin: 1rem 0;
+}
